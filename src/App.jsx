@@ -33,6 +33,46 @@ function useChime(enabled = true) {
   return play
 }
 
+function Robot({ side = 'left', mood = 'idle' }) {
+  // simple SVG robot mascot with blinking eyes and bob animation
+  const isLeft = side === 'left'
+  return (
+    <div className={`pointer-events-none absolute ${isLeft ? 'left-4 sm:left-8' : 'right-4 sm:right-8'} bottom-24 sm:bottom-12 select-none`}
+         style={{ filter: 'drop-shadow(0 6px 30px rgba(56,189,248,0.25))' }}>
+      <div className={`relative ${mood === 'cheer' ? 'animate-bob-fast' : mood === 'talk' ? 'animate-bob' : 'animate-bob-slow'}`}>
+        <svg width="140" height="120" viewBox="0 0 140 120" fill="none">
+          <defs>
+            <linearGradient id="botBody" x1="0" y1="0" x2="140" y2="120" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#22d3ee" stopOpacity="0.85" />
+              <stop offset="1" stopColor="#a78bfa" stopOpacity="0.85" />
+            </linearGradient>
+          </defs>
+          {/* antenna */}
+          <circle cx="70" cy="8" r="6" fill="#22d3ee" opacity="0.7" className="animate-pulse" />
+          <rect x="68" y="14" width="4" height="10" rx="2" fill="#7dd3fc" />
+          {/* head */}
+          <rect x="35" y="26" width="70" height="44" rx="12" fill="url(#botBody)" opacity="0.9" />
+          <rect x="40" y="34" width="60" height="28" rx="8" fill="#0ea5e9" opacity="0.3" />
+          {/* eyes */}
+          <g className="animate-blink">
+            <rect x="52" y="40" width="12" height="8" rx="3" fill="#e2e8f0" />
+            <rect x="76" y="40" width="12" height="8" rx="3" fill="#e2e8f0" />
+          </g>
+          {/* mouth */}
+          <rect x="60" y="54" width="20" height="4" rx="2" fill="#e0e7ff" opacity="0.8" />
+          {/* body */}
+          <rect x="30" y="72" width="80" height="36" rx="14" fill="url(#botBody)" opacity="0.65" />
+          <rect x="36" y="78" width="68" height="8" rx="4" fill="#67e8f9" opacity="0.35" />
+          {/* arms */}
+          <rect x="16" y="80" width="16" height="8" rx="4" fill="#38bdf8" opacity="0.6" />
+          <rect x="108" y="80" width="16" height="8" rx="4" fill="#a78bfa" opacity="0.6" />
+        </svg>
+        <div className={`absolute ${isLeft ? 'right-[-6px]' : 'left-[-6px]'} -top-2 px-2 py-1 rounded-md text-[10px] tracking-widest uppercase bg-slate-900/80 border border-white/10 text-cyan-200`}>DDC Bot</div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const DEFAULT_SECONDS = 12 * 60
   const [secondsLeft, setSecondsLeft] = useState(DEFAULT_SECONDS)
@@ -48,6 +88,18 @@ function App() {
   const chime = useChime(soundOn)
 
   const progress = useMemo(() => Math.max(0, Math.min(1, secondsLeft / DEFAULT_SECONDS)), [secondsLeft])
+
+  // background particles (generated once)
+  const particles = useMemo(() => {
+    return Array.from({ length: 42 }).map((_, i) => {
+      const size = Math.random() * 3 + 1
+      const top = Math.random() * 100
+      const left = Math.random() * 100
+      const dur = 8 + Math.random() * 18
+      const delay = -Math.random() * 10
+      return { id: i, size, top, left, dur, delay }
+    })
+  }, [])
 
   // ticker
   useEffect(() => {
@@ -127,6 +179,9 @@ function App() {
   // decorative tick marks
   const ticks = Array.from({ length: 60 })
 
+  // dynamic orbit angle based on progress
+  const orbitAngle = useMemo(() => 360 * (1 - progress), [progress])
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 text-white selection:bg-cyan-400/30">
       {/* Ambient background */}
@@ -135,10 +190,22 @@ function App() {
         <div className="absolute -top-24 -left-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-30 bg-cyan-500/30" />
         <div className="absolute -bottom-32 -right-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-20 bg-fuchsia-500/20" />
         {/* animated grid */}
-        <div className="absolute inset-0 opacity-[0.08]" style={{backgroundImage:'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize:'32px 32px'}}/>
+        <div className="absolute inset-0 opacity-[0.08]" style={{backgroundImage:'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize:'32px 32px', animation:'gridShift 22s linear infinite'}}/>
+        {/* particle field */}
+        {particles.map(p => (
+          <div key={p.id} className="absolute rounded-full bg-cyan-300/40"
+               style={{
+                 width: p.size,
+                 height: p.size,
+                 top: `${p.top}%`,
+                 left: `${p.left}%`,
+                 boxShadow: '0 0 10px rgba(34,211,238,0.45)',
+                 animation: `floatY ${p.dur}s ease-in-out infinite ${p.delay}s, floatX ${p.dur*1.3}s ease-in-out infinite ${p.delay}s`
+               }} />
+        ))}
       </div>
 
-      {/* Top bar */}
+      {/* Top bar with marquee */}
       <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-slate-900/40 bg-slate-900/60 border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 md:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -159,6 +226,14 @@ function App() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
               {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             </button>
+          </div>
+        </div>
+        <div className="h-6 border-t border-white/10 overflow-hidden text-[11px] tracking-[0.2em] uppercase text-cyan-200/80">
+          <div className="whitespace-nowrap animate-marquee py-1">
+            <span className="mx-6">ACM presents DDC — Drink, Derive & Code</span>
+            <span className="mx-6">Robotics • Math • Code • Energy • Teamwork</span>
+            <span className="mx-6">Use Space to start/pause • R reset • F fullscreen • M sound</span>
+            <span className="mx-6">Good luck, coders!</span>
           </div>
         </div>
       </header>
@@ -183,6 +258,9 @@ function App() {
             {/* sheen */}
             <div className="pointer-events-none absolute -inset-1 opacity-25 blur-3xl bg-[radial-gradient(circle_at_20%_20%,#38bdf8,transparent_35%),radial-gradient(circle_at_70%_80%,#a78bfa,transparent_30%)]" />
 
+            {/* scanning beam */}
+            <div className="pointer-events-none absolute -inset-x-8 -top-24 h-24 bg-gradient-to-b from-transparent via-cyan-300/10 to-transparent animate-scan" />
+
             <div className="relative z-10 flex flex-col items-center">
               {/* Circular visual */}
               <div className="relative" style={{ width: 'min(80vw, 540px)', height: 'min(80vw, 540px)' }}>
@@ -192,6 +270,27 @@ function App() {
                 <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(#22d3ee ${Math.round(progress*360)}deg, #0f172a ${Math.round(progress*360)}deg)`}}/>
                 {/* inner mask */}
                 <div className="absolute inset-[14px] rounded-full bg-slate-950/75 backdrop-blur" />
+
+                {/* orbiting ACM badge */}
+                <div className="absolute inset-0">
+                  <div className="absolute left-1/2 top-1/2" style={{transform:`rotate(${orbitAngle}deg)`}}>
+                    <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${(Math.min(window.innerWidth, 540) / 2 || 220) - 30}px)` }}>
+                      <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/40 grid place-items-center text-[10px] tracking-wider text-cyan-200 backdrop-blur-sm">
+                        ACM
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* orbiting DDC badge (opposite) */}
+                <div className="absolute inset-0">
+                  <div className="absolute left-1/2 top-1/2" style={{transform:`rotate(${orbitAngle+180}deg)`}}>
+                    <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${(Math.min(window.innerWidth, 540) / 2 || 220) - 30}px)` }}>
+                      <div className="w-10 h-10 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 grid place-items-center text-[10px] tracking-wider text-fuchsia-200 backdrop-blur-sm">
+                        DDC
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* tick marks */}
                 <div className="absolute inset-[6px] rounded-full">
@@ -211,11 +310,18 @@ function App() {
                 </div>
               </div>
 
-              {/* linear progress */}
+              {/* linear progress + sound visualizer */}
               <div className="w-full mt-8">
                 <div className="h-2 rounded-full bg-slate-800/70 overflow-hidden border border-white/10">
                   <div className="h-full bg-gradient-to-r from-cyan-400 to-indigo-400 transition-[width] duration-500" style={{ width: `${progress*100}%` }} />
                 </div>
+                {soundOn && (
+                  <div className="mt-3 flex items-end justify-center gap-1 h-5">
+                    {Array.from({length: 24}).map((_,i)=> (
+                      <div key={i} className="w-1 rounded-full bg-cyan-400/70 animate-bars" style={{animationDelay:`${i*0.04}s`}} />
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Controls Row */}
@@ -272,11 +378,34 @@ function App() {
         </div>
       </main>
 
+      {/* robots */}
+      <Robot side="left" mood={ended ? 'cheer' : running ? 'talk' : 'idle'} />
+      <Robot side="right" mood={ended ? 'cheer' : running ? 'talk' : 'idle'} />
+
       <footer className="mx-auto max-w-7xl px-4 md:px-8 py-8 text-center text-xs text-slate-500">
         © {new Date().getFullYear()} ACM • DDC — Drink, Derive & Code
       </footer>
 
-      <style>{`@keyframes fade{0%{opacity:0}10%{opacity:1}100%{opacity:0}}`}</style>
+      <style>{`
+        @keyframes fade{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
+        @keyframes floatY{0%,100%{transform:translateY(-10px)}50%{transform:translateY(10px)}}
+        @keyframes floatX{0%,100%{transform:translateX(-6px)}50%{transform:translateX(6px)}}
+        @keyframes gridShift {0%{background-position:0 0,0 0}100%{background-position:0 32px,32px 0}}
+        @keyframes scan {0%{transform:translateY(-120%)}100%{transform:translateY(220%)} }
+        @keyframes bob-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+        @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+        @keyframes bob-fast{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+        @keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(0.15)}}
+        .animate-scan{animation:scan 6s linear infinite}
+        .animate-bob-slow{animation:bob-slow 4.5s ease-in-out infinite}
+        .animate-bob{animation:bob 3.5s ease-in-out infinite}
+        .animate-bob-fast{animation:bob-fast 2.6s ease-in-out infinite}
+        .animate-blink{transform-origin:50% 50%; animation:blink 4.2s linear infinite}
+        @keyframes bars{0%{height:4px}50%{height:100%}100%{height:4px}}
+        .animate-bars{animation:bars 1.3s ease-in-out infinite}
+        @keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)} }
+        .animate-marquee{display:inline-block; min-width:200%; animation:marquee 24s linear infinite}
+      `}</style>
     </div>
   )
 }
