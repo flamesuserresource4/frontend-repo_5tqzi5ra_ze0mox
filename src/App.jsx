@@ -36,7 +36,7 @@ function useChime(enabled = true) {
     }
   }
 
-  // Powerful buzzer: mixed oscillators + noise burst + soft clipping
+  // Powerful buzzer: mixed oscillators + noise burst + soft clipping + tremolo
   play.buzzer = () => {
     if (!enabled) return
     try {
@@ -57,28 +57,26 @@ function useChime(enabled = true) {
       }
       shaper.curve = curve
 
-      // Filter to make it punchy
+      // Filter
       const bp = ctx.createBiquadFilter()
       bp.type = 'bandpass'
-      bp.frequency.setValueAtTime(500, now)
-      bp.Q.setValueAtTime(0.6, now)
+      bp.frequency.setValueAtTime(520, now)
+      bp.Q.setValueAtTime(0.8, now)
 
-      // Low square + saw for body
+      // Body
       const osc1 = ctx.createOscillator()
       osc1.type = 'square'
       osc1.frequency.setValueAtTime(140, now)
       const osc2 = ctx.createOscillator()
       osc2.type = 'sawtooth'
       osc2.frequency.setValueAtTime(280, now)
-
       const gainBody = ctx.createGain()
       gainBody.gain.setValueAtTime(0.8, now)
 
-      // Noise burst for bite
-      const bufferSize = 2 * ctx.sampleRate
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+      // Noise burst
+      const noiseBuffer = ctx.createBuffer(1, 2 * ctx.sampleRate, ctx.sampleRate)
       const data = noiseBuffer.getChannelData(0)
-      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
       const noise = ctx.createBufferSource()
       noise.buffer = noiseBuffer
       const noiseGain = ctx.createGain()
@@ -87,15 +85,15 @@ function useChime(enabled = true) {
       // Envelope
       const env = ctx.createGain()
       env.gain.setValueAtTime(0.0001, now)
-      env.gain.exponentialRampToValueAtTime(1.0, now + 0.015)
-      env.gain.exponentialRampToValueAtTime(0.0001, now + 1.0)
+      env.gain.exponentialRampToValueAtTime(1.0, now + 0.02)
+      env.gain.exponentialRampToValueAtTime(0.0001, now + 1.1)
 
-      // LFO tremolo for urgency
+      // LFO
       const lfo = ctx.createOscillator()
       lfo.type = 'sine'
       lfo.frequency.setValueAtTime(9, now)
       const lfoGain = ctx.createGain()
-      lfoGain.gain.setValueAtTime(0.4, now)
+      lfoGain.gain.setValueAtTime(0.45, now)
       lfo.connect(lfoGain)
       lfoGain.connect(env.gain)
 
@@ -106,7 +104,8 @@ function useChime(enabled = true) {
       gainBody.connect(bp)
       noiseGain.connect(bp)
       bp.connect(shaper)
-      shaper.connect(master)
+      shaper.connect(env)
+      env.connect(master)
       master.connect(ctx.destination)
 
       osc1.start(now)
@@ -114,10 +113,10 @@ function useChime(enabled = true) {
       noise.start(now)
       lfo.start(now)
 
-      osc1.stop(now + 1.0)
-      osc2.stop(now + 1.0)
+      osc1.stop(now + 1.1)
+      osc2.stop(now + 1.1)
       noise.stop(now + 0.25)
-      lfo.stop(now + 1.0)
+      lfo.stop(now + 1.1)
     } catch (e) {
       // ignore
     }
@@ -126,34 +125,39 @@ function useChime(enabled = true) {
   return play
 }
 
-function Robot({ side = 'left', mood = 'idle' }) {
+function Drone({ side = 'left', mode = 'idle' }) {
   const isLeft = side === 'left'
   return (
-    <div className={`pointer-events-none absolute ${isLeft ? 'left-2 sm:left-8' : 'right-2 sm:right-8'} bottom-24 sm:bottom-12 select-none`}
-         style={{ filter: 'drop-shadow(0 6px 30px rgba(56,189,248,0.25))' }}>
-      <div className={`relative ${mood === 'cheer' ? 'animate-bob-fast' : mood === 'talk' ? 'animate-bob' : 'animate-bob-slow'}`}>
-        <svg width="140" height="120" viewBox="0 0 140 120" fill="none">
+    <div className={`pointer-events-none absolute ${isLeft ? 'left-3 sm:left-10' : 'right-3 sm:right-10'} bottom-24 sm:bottom-10 select-none`}
+         style={{ filter: 'drop-shadow(0 12px 40px rgba(56,189,248,0.35))' }}>
+      <div className={`relative ${mode === 'cheer' ? 'animate-wobble' : mode === 'talk' ? 'animate-hover' : 'animate-hover-slow'}`}>
+        <svg width="170" height="130" viewBox="0 0 170 130" fill="none">
           <defs>
-            <linearGradient id="botBody" x1="0" y1="0" x2="140" y2="120" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#22d3ee" stopOpacity="0.85" />
-              <stop offset="1" stopColor="#a78bfa" stopOpacity="0.85" />
-            </linearGradient>
+            <radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(85 65) rotate(90) scale(64 84)">
+              <stop stopColor="#67e8f9" stopOpacity="0.9" />
+              <stop offset="1" stopColor="#a78bfa" stopOpacity="0.2" />
+            </radialGradient>
           </defs>
-          <circle cx="70" cy="8" r="6" fill="#22d3ee" opacity="0.7" className="animate-pulse" />
-          <rect x="68" y="14" width="4" height="10" rx="2" fill="#7dd3fc" />
-          <rect x="35" y="26" width="70" height="44" rx="12" fill="url(#botBody)" opacity="0.9" />
-          <rect x="40" y="34" width="60" height="28" rx="8" fill="#0ea5e9" opacity="0.3" />
-          <g className="animate-blink">
-            <rect x="52" y="40" width="12" height="8" rx="3" fill="#e2e8f0" />
-            <rect x="76" y="40" width="12" height="8" rx="3" fill="#e2e8f0" />
+          {/* body */}
+          <ellipse cx="85" cy="60" rx="54" ry="28" fill="url(#g1)" opacity="0.9"/>
+          <rect x="52" y="48" width="66" height="24" rx="12" fill="#0ea5e9" opacity="0.2"/>
+          {/* eye */}
+          <g className="animate-blink" transform="translate(0,2)">
+            <circle cx="85" cy="58" r="10" fill="#e2e8f0" />
+            <circle cx="85" cy="58" r="5" fill="#22d3ee" />
           </g>
-          <rect x="60" y="54" width="20" height="4" rx="2" fill="#e0e7ff" opacity="0.8" />
-          <rect x="30" y="72" width="80" height="36" rx="14" fill="url(#botBody)" opacity="0.65" />
-          <rect x="36" y="78" width="68" height="8" rx="4" fill="#67e8f9" opacity="0.35" />
-          <rect x="16" y="80" width="16" height="8" rx="4" fill="#38bdf8" opacity="0.6" />
-          <rect x="108" y="80" width="16" height="8" rx="4" fill="#a78bfa" opacity="0.6" />
+          {/* rotors */}
+          <g className="animate-rotor" transform="translate(2,-16)">
+            <rect x="18" y="56" width="40" height="6" rx="3" fill="#bae6fd" opacity="0.6"/>
+            <rect x="112" y="56" width="40" height="6" rx="3" fill="#ddd6fe" opacity="0.6"/>
+          </g>
+          {/* legs */}
+          <rect x="72" y="78" width="4" height="16" rx="2" fill="#93c5fd" opacity="0.7"/>
+          <rect x="94" y="78" width="4" height="16" rx="2" fill="#c4b5fd" opacity="0.7"/>
         </svg>
-        <div className={`absolute ${isLeft ? 'right-[-6px]' : 'left-[-6px]'} -top-2 px-2 py-1 rounded-md text-[10px] tracking-widest uppercase bg-slate-900/80 border border-white/10 text-cyan-200`}>DDC Bot</div>
+        {/* spotlight sweep */}
+        <div className="absolute left-1/2 top-full -translate-x-1/2 mt-1 h-24 w-24 rounded-full bg-gradient-to-b from-cyan-300/25 to-transparent blur-2xl animate-sweep"/>
+        <div className={`absolute ${isLeft ? 'right-[-8px]' : 'left-[-8px]'} -top-2 px-2 py-1 rounded-md text-[10px] tracking-widest uppercase bg-slate-900/80 border border-white/10 text-cyan-200`}>DDC Drone</div>
       </div>
     </div>
   )
@@ -165,9 +169,11 @@ function App() {
   const [running, setRunning] = useState(false)
   const [ended, setEnded] = useState(false)
   const [flash, setFlash] = useState(false)
+  const [shake, setShake] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
   const [label, setLabel] = useState('Round 1')
+  const [explosions, setExplosions] = useState([]) // ring explosions
 
   const intervalRef = useRef(null)
   const initialTitle = useRef(document.title)
@@ -181,7 +187,7 @@ function App() {
     const rect = e.currentTarget.getBoundingClientRect()
     const px = (e.clientX - rect.left) / rect.width // 0..1
     const py = (e.clientY - rect.top) / rect.height
-    const maxTilt = 6
+    const maxTilt = 8
     const x = (py - 0.5) * -maxTilt
     const y = (px - 0.5) * maxTilt
     setTilt({ x, y })
@@ -190,21 +196,21 @@ function App() {
 
   // particles and comets
   const particles = useMemo(() => {
-    return Array.from({ length: 120 }).map((_, i) => {
-      const size = Math.random() * 3 + 1
+    return Array.from({ length: 180 }).map((_, i) => {
+      const size = Math.random() * 2.5 + 0.5
       const top = Math.random() * 100
       const left = Math.random() * 100
-      const dur = 8 + Math.random() * 18
-      const delay = -Math.random() * 10
+      const dur = 10 + Math.random() * 22
+      const delay = -Math.random() * 12
       return { id: i, size, top, left, dur, delay }
     })
   }, [])
 
   const comets = useMemo(() => {
-    return Array.from({ length: 10 }).map((_, i) => {
+    return Array.from({ length: 14 }).map((_, i) => {
       const top = Math.random() * 100
-      const delay = Math.random() * 8
-      const dur = 6 + Math.random() * 6
+      const delay = Math.random() * 10
+      const dur = 6 + Math.random() * 8
       const hue = Math.random() * 360
       return { id: i, top, delay, dur, hue }
     })
@@ -232,9 +238,15 @@ function App() {
     if (secondsLeft === 0 && !ended) {
       setEnded(true)
       setFlash(true)
-      // STRONG BUZZER
+      setShake(true)
+      // buzzer + visuals
       chime.buzzer?.()
-      setTimeout(() => setFlash(false), 800)
+      // ring explosions
+      const id = Date.now()
+      setExplosions((ex) => [...ex, { id }])
+      setTimeout(() => setFlash(false), 900)
+      setTimeout(() => setShake(false), 700)
+      setTimeout(() => setExplosions((ex) => ex.filter((e) => e.id !== id)), 1200)
     }
     if (secondsLeft > 0 && ended) setEnded(false)
   }, [secondsLeft])
@@ -274,6 +286,8 @@ function App() {
     setSecondsLeft(DEFAULT_SECONDS)
     setEnded(false)
     setFlash(false)
+    setShake(false)
+    setExplosions([])
     document.title = initialTitle.current
   }
 
@@ -283,20 +297,25 @@ function App() {
     setEnded(false)
   }
 
-  const ticks = Array.from({ length: 60 })
   const orbitAngle = useMemo(() => 360 * (1 - progress), [progress])
+
+  // constants for circle layout
+  const circleSize = 540
+  const tickRadius = circleSize / 2 - 30
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 text-white selection:bg-cyan-400/30">
       {/* Ambient background */}
       <div className="absolute inset-0 -z-10" onMouseMove={onMove} onMouseLeave={onLeave}>
         {/* gradient blobs with motion and parallax */}
-        <div className="absolute -top-24 -left-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-30 bg-cyan-500/30 animate-blob"
-             style={{ transform: `translate3d(${tilt.y * -4}px, ${tilt.x * -3}px, 0)` }} />
-        <div className="absolute -bottom-32 -right-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-25 bg-fuchsia-500/25 animate-blob2"
-             style={{ transform: `translate3d(${tilt.y * 5}px, ${tilt.x * 4}px, 0)` }} />
-        <div className="absolute top-1/4 left-1/3 h-[26rem] w-[26rem] rounded-full blur-3xl opacity-10 bg-indigo-500/40 animate-blob3"
-             style={{ transform: `translate3d(${tilt.y * 2}px, ${tilt.x * 2}px, 0)` }} />
+        <div className="absolute -top-24 -left-24 h-[38rem] w-[38rem] rounded-full blur-3xl opacity-30 bg-cyan-500/30 animate-blob"
+             style={{ transform: `translate3d(${tilt.y * -6}px, ${tilt.x * -4}px, 0)` }} />
+        <div className="absolute -bottom-32 -right-24 h-[38rem] w-[38rem] rounded-full blur-3xl opacity-25 bg-fuchsia-500/25 animate-blob2"
+             style={{ transform: `translate3d(${tilt.y * 6}px, ${tilt.x * 5}px, 0)` }} />
+        <div className="absolute top-1/4 left-1/3 h-[28rem] w-[28rem] rounded-full blur-3xl opacity-10 bg-indigo-500/40 animate-blob3"
+             style={{ transform: `translate3d(${tilt.y * 3}px, ${tilt.x * 2}px, 0)` }} />
+        {/* starfield layers */}
+        <div className="absolute inset-0 opacity-30" style={{backgroundImage:'radial-gradient(circle at 20% 30%, rgba(59,130,246,0.08), transparent 40%), radial-gradient(circle at 70% 70%, rgba(236,72,153,0.07), transparent 45%)'}}/>
         {/* animated grid */}
         <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{backgroundImage:'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize:'32px 32px', animation:'gridShift 22s linear infinite'}}/>
         {/* particle field */}
@@ -323,17 +342,23 @@ function App() {
         <div className="absolute inset-0 opacity-[0.05]" style={{backgroundImage:'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'160\' height=\'160\' viewBox=\'0 0 160 160\'><filter id=\'n\'><feTurbulence type=\'fractalNoise\' baseFrequency=\'0.8\' numOctaves=\'2\' stitchTiles=\'stitch\'/></filter><rect width=\'100%\' height=\'100%\' filter=\'url(%23n)\' opacity=\'0.6\'/></svg>")', animation:'grain 1.5s steps(6) infinite'}} />
       </div>
 
-      {/* Top bar: centered ACM + DDC, sponsor on the right */}
+      {/* Top bar */}
       <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-slate-900/40 bg-slate-900/60 border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 md:px-8 h-16 grid grid-cols-3 items-center">
           {/* left controls */}
           <div className="flex items-center gap-2">
-            <button onClick={() => setSoundOn((s)=>!s)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${soundOn ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-500/30 bg-slate-800/60 text-slate-300'}`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 15v-6h3l5-4v14l-5-4H4Z" stroke="currentColor" strokeWidth="1.5"/><path d="M16 9a3 3 0 0 1 0 6" stroke="currentColor" strokeWidth="1.5"/></svg>
+            <button onClick={() => setSoundOn((s)=>!s)} className={`group inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all ${soundOn ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-500/30 bg-slate-800/60 text-slate-300'}`}>
+              <span className="relative grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 15v-6h3l5-4v14l-5-4H4Z" stroke="currentColor" strokeWidth="1.5"/><path d="M16 9a3 3 0 0 1 0 6" stroke="currentColor" strokeWidth="1.5"/></svg>
+                <span className="absolute inset-0 rounded-full blur-md opacity-0 group-hover:opacity-80 transition bg-emerald-400/40"></span>
+              </span>
               {soundOn ? 'Sound' : 'Muted'}
             </button>
-            <button onClick={toggleFullscreen} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-cyan-400/40 bg-cyan-500/10 text-cyan-200 text-sm hover:bg-cyan-500/20 transition-all">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <button onClick={toggleFullscreen} className="group inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-cyan-400/40 bg-cyan-500/10 text-cyan-200 text-sm hover:bg-cyan-500/20 transition-all">
+              <span className="relative grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                <span className="absolute inset-0 rounded-full blur-md opacity-0 group-hover:opacity-80 transition bg-cyan-400/40"></span>
+              </span>
               Fullscreen
             </button>
           </div>
@@ -358,7 +383,7 @@ function App() {
       </header>
 
       {/* Hero with Spline */}
-      <section className="relative h-[58vh] md:h-[64vh]">
+      <section className="relative h-[56vh] md:h-[62vh]">
         <Spline scene="https://prod.spline.design/4TrRyLcIHhcItjnk/scene.splinecode" style={{ width: '100%', height: '100%' }} />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-950/10 via-slate-950/30 to-slate-950" />
         <div className="absolute inset-0 flex items-end justify-center pb-6 md:pb-10">
@@ -371,65 +396,89 @@ function App() {
 
       {/* Main timer panel (interactive tilt) */}
       <main className="mx-auto max-w-6xl px-4 md:px-8 -mt-10 md:-mt-14 relative z-10">
-        <div className="relative rounded-3xl p-6 md:p-10 bg-gradient-to-br from-slate-900/70 to-slate-900/30 border border-white/10 shadow-[0_10px_60px_rgba(0,0,0,0.5)] overflow-hidden"
-             style={{ transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`, transition: 'transform 120ms ease-out', willChange: 'transform' }}
+        <div className={`relative rounded-3xl p-6 md:p-10 bg-gradient-to-br from-slate-900/70 to-slate-900/30 border border-white/10 shadow-[0_10px_60px_rgba(0,0,0,0.5)] overflow-hidden ${shake ? 'animate-shake' : ''}`}
+             style={{ transform: `perspective(1100px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`, transition: 'transform 120ms ease-out', willChange: 'transform' }}
              onMouseMove={onMove} onMouseLeave={onLeave}>
+          {/* holographic wash */}
           <div className="pointer-events-none absolute -inset-1 opacity-25 blur-3xl bg-[radial-gradient(circle_at_20%_20%,#38bdf8,transparent_35%),radial-gradient(circle_at_70%_80%,#a78bfa,transparent_30%)]" />
           <div className="pointer-events-none absolute -inset-x-8 -top-24 h-24 bg-gradient-to-b from-transparent via-cyan-300/10 to-transparent animate-scan" />
 
           <div className="relative z-10 flex flex-col items-center">
             {/* Circular visual */}
-            <div className="relative" style={{ width: 'min(80vw, 540px)', height: 'min(80vw, 540px)' }}>
-              <div className="absolute inset-0 rounded-full bg-slate-800/60" />
+            <div className="relative" style={{ width: 'min(80vw, 560px)', height: 'min(80vw, 560px)' }}>
+              {/* layers */}
+              <div className="absolute inset-0 rounded-full bg-slate-900/70" />
               <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(#22d3ee ${Math.round(progress*360)}deg, #0f172a ${Math.round(progress*360)}deg)`}}/>
-              <div className="absolute inset-[14px] rounded-full bg-slate-950/75 backdrop-blur" />
-
-              {/* subtle depth glow */}
-              <div className="absolute inset-[8px] rounded-full" style={{boxShadow:'inset 0 0 40px rgba(34,211,238,0.15), inset 0 0 80px rgba(168,85,247,0.1)'}} />
+              <div className="absolute inset-[16px] rounded-full bg-slate-950/75 backdrop-blur" />
+              <div className="absolute inset-[8px] rounded-full" style={{boxShadow:'inset 0 0 50px rgba(34,211,238,0.16), inset 0 0 100px rgba(168,85,247,0.12)'}} />
+              {/* reflective sweep */}
+              <div className="absolute inset-[60px] rounded-full opacity-20" style={{background:'radial-gradient(120px 160px at 30% 20%, rgba(255,255,255,0.35), transparent 60%)'}}/>
 
               {/* orbiting badges */}
               <div className="absolute inset-0">
                 <div className="absolute left-1/2 top-1/2" style={{transform:`rotate(${orbitAngle}deg)`}}>
-                  <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${(Math.min(window.innerWidth, 540) / 2 || 220) - 30}px)` }}>
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/40 grid place-items-center text-[10px] tracking-wider text-cyan-200 backdrop-blur-sm">ACM</div>
+                  <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${tickRadius - 10}px)` }}>
+                    <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/40 grid place-items-center text-[10px] tracking-wider text-cyan-200 backdrop-blur-sm shadow-[0_0_20px_rgba(34,211,238,0.25)]">ACM</div>
                   </div>
                 </div>
               </div>
               <div className="absolute inset-0">
                 <div className="absolute left-1/2 top-1/2" style={{transform:`rotate(${orbitAngle+180}deg)`}}>
-                  <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${(Math.min(window.innerWidth, 540) / 2 || 220) - 30}px)` }}>
-                    <div className="w-10 h-10 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 grid place-items-center text-[10px] tracking-wider text-fuchsia-200 backdrop-blur-sm">DDC</div>
+                  <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: `translateX(${tickRadius - 10}px)` }}>
+                    <div className="w-10 h-10 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 grid place-items-center text-[10px] tracking-wider text-fuchsia-200 backdrop-blur-sm shadow-[0_0_20px_rgba(217,70,239,0.25)]">DDC</div>
                   </div>
                 </div>
               </div>
 
-              {/* tick marks */}
-              <div className="absolute inset-[6px] rounded-full">
+              {/* tick marks (extruded) */}
+              <div className="absolute inset-[10px] rounded-full">
                 {Array.from({ length: 60 }).map((_, i) => (
-                  <div key={i} className="absolute left-1/2 top-1/2 origin-[0_center]" style={{transform:`rotate(${i*6}deg) translateX(240px)`}}>
-                    <div className={`h-[10px] w-[2px] ${i%5===0?'bg-cyan-300/70 h-[14px]':'bg-white/15'}`}/>
+                  <div key={i} className="absolute left-1/2 top-1/2 origin-[0_center]" style={{transform:`rotate(${i*6}deg) translateX(${tickRadius}px)`}}>
+                    <div className={`h-[12px] w-[2px] ${i%5===0?'bg-cyan-300/70 h-[16px] shadow-[0_0_6px_rgba(34,211,238,0.6)]':'bg-white/15'}`}/>
                   </div>
                 ))}
               </div>
 
+              {/* wireframe sphere */}
+              <div className="absolute inset-[70px] rounded-full border border-white/10 opacity-30 animate-rotate-slow" style={{maskImage:'radial-gradient(circle at center, black 55%, transparent 60%)'}}/>
+
               {/* time */}
               <div className="absolute inset-0 grid place-items-center select-none">
-                <div className="text-[18vw] md:text-[8rem] leading-none font-extrabold tracking-tight tabular-nums bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_2px_20px_rgba(34,211,238,0.15)]">
+                <div className="text-[18vw] md:text-[8.5rem] leading-none font-extrabold tracking-tight tabular-nums bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_2px_20px_rgba(34,211,238,0.15)]">
                   {formatTime(secondsLeft)}
                 </div>
                 <div className="mt-2 text-slate-400 text-sm md:text-base">{label}</div>
               </div>
+
+              {/* ring explosions when time up */}
+              {explosions.map((e) => (
+                <>
+                  <div key={e.id+':1'} className="absolute inset-0 rounded-full border-2 border-cyan-300/60 animate-ring-explode"/>
+                  <div key={e.id+':2'} className="absolute inset-[20px] rounded-full border-2 border-fuchsia-300/60 animate-ring-explode-slower"/>
+                </>
+              ))}
+            </div>
+
+            {/* neon ring orbit */}
+            <div className="relative mt-6 w-full h-10">
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-16 rounded-full opacity-60"
+                   style={{background:'radial-gradient(60% 100% at 50% 50%, rgba(34,211,238,0.35), transparent 60%)', filter:'blur(8px)'}}/>
+              <div className="absolute inset-0 flex items-center justify-center gap-2">
+                {Array.from({length: 10}).map((_,i)=> (
+                  <div key={i} className="w-6 h-[2px] bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent animate-orbit-line" style={{animationDelay:`${i*0.08}s`}}/>
+                ))}
+              </div>
             </div>
 
             {/* linear progress + sound visualizer */}
-            <div className="w-full mt-8">
+            <div className="w-full mt-6">
               <div className="h-2 rounded-full bg-slate-800/70 overflow-hidden border border-white/10">
                 <div className="h-full bg-gradient-to-r from-cyan-400 to-indigo-400 transition-[width] duration-500" style={{ width: `${progress*100}%` }} />
               </div>
               {soundOn && (
                 <div className="mt-3 flex items-end justify-center gap-1 h-5">
-                  {Array.from({length: 24}).map((_,i)=> (
-                    <div key={i} className="w-1 rounded-full bg-cyan-400/70 animate-bars" style={{animationDelay:`${i*0.04}s`}} />
+                  {Array.from({length: 28}).map((_,i)=> (
+                    <div key={i} className="w-[3px] rounded-full bg-cyan-400/70 animate-bars" style={{animationDelay:`${i*0.035}s`}} />
                   ))}
                 </div>
               )}
@@ -437,17 +486,26 @@ function App() {
 
             {/* Controls Row */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 md:gap-4">
-              <button onClick={toggle} className={`px-6 py-2.5 rounded-xl font-semibold shadow transition-all border ${running ? 'bg-rose-500/90 hover:bg-rose-500 border-rose-400/40' : 'bg-emerald-500/90 hover:bg-emerald-500 border-emerald-400/40'} text-white`}>{running ? 'Pause' : 'Start'}</button>
-              <button onClick={reset} className="px-5 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">Reset</button>
-              <button onClick={() => setSecondsLeft((s)=>Math.max(0,s-60))} className="px-4 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">-1:00</button>
-              <button onClick={() => setSecondsLeft((s)=>Math.min(60*99,s+60))} className="px-4 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">+1:00</button>
-              <button onClick={() => setSoundOn(s=>!s)} className={`px-4 py-2.5 rounded-xl font-semibold shadow transition-all border ${soundOn?'border-emerald-400/40 bg-emerald-500/10 text-emerald-200':'border-slate-500/30 bg-slate-800/60 text-slate-300'}`}>{soundOn?'Sound On':'Sound Off'}</button>
+              <button onClick={toggle} className={`group px-6 py-2.5 rounded-xl font-semibold shadow transition-all border ${running ? 'bg-rose-500/90 hover:bg-rose-500 border-rose-400/40' : 'bg-emerald-500/90 hover:bg-emerald-500 border-emerald-400/40'} text-white`}>
+                <span className="relative">
+                  {running ? 'Pause' : 'Start'}
+                  <span className="absolute -inset-1 rounded-xl blur-lg opacity-0 group-hover:opacity-80 transition ${running ? 'bg-rose-400/40' : 'bg-emerald-400/40'}"></span>
+                </span>
+              </button>
+              <button onClick={reset} className="group px-5 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">
+                <span className="relative">Reset<span className="absolute -inset-1 rounded-xl blur-lg opacity-0 group-hover:opacity-60 transition bg-white/10"></span></span>
+              </button>
+              <button onClick={() => setSecondsLeft((s)=>Math.max(0,s-60))} className="group px-4 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">-1:00</button>
+              <button onClick={() => setSecondsLeft((s)=>Math.min(60*99,s+60))} className="group px-4 py-2.5 rounded-xl font-semibold shadow transition-all bg-slate-800/70 hover:bg-slate-800 border border-white/10">+1:00</button>
+              <button onClick={() => setSoundOn(s=>!s)} className={`group px-4 py-2.5 rounded-xl font-semibold shadow transition-all border ${soundOn?'border-emerald-400/40 bg-emerald-500/10 text-emerald-200':'border-slate-500/30 bg-slate-800/60 text-slate-300'}`}>{soundOn?'Sound On':'Sound Off'}</button>
             </div>
 
             {/* Presets */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               {[12,10,8,5,3].map((m)=> (
-                <button key={m} onClick={() => setPreset(m)} className="px-3 py-1.5 rounded-lg text-sm border border-white/10 bg-slate-800/60 hover:bg-slate-800/80 transition">{m}:00</button>
+                <button key={m} onClick={() => setPreset(m)} className="group px-3 py-1.5 rounded-lg text-sm border border-white/10 bg-slate-800/60 hover:bg-slate-800/80 transition">
+                  <span className="relative">{m}:00<span className="absolute -inset-1 rounded-lg blur-lg opacity-0 group-hover:opacity-50 transition bg-cyan-400/20"></span></span>
+                </button>
               ))}
               <input value={label} onChange={(e)=>setLabel(e.target.value)} className="ml-2 px-3 py-1.5 rounded-lg text-sm bg-slate-800/60 border border-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-400/40" placeholder="Label (e.g., Round 1)" />
             </div>
@@ -457,12 +515,16 @@ function App() {
 
           {/* flash on finish */}
           {flash && <div className="pointer-events-none absolute inset-0 bg-white/70 animate-[fade_600ms_ease]" />}
+
+          {/* perspective grid floor */}
+          <div className="pointer-events-none absolute left-1/2 bottom-0 -translate-x-1/2 w-[140%] h-40 opacity-[0.12]"
+               style={{backgroundImage:'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize:'28px 28px', transform:'perspective(800px) rotateX(70deg)', transformOrigin:'center bottom'}}/>
         </div>
       </main>
 
-      {/* robots */}
-      <Robot side="left" mood={ended ? 'cheer' : running ? 'talk' : 'idle'} />
-      <Robot side="right" mood={ended ? 'cheer' : running ? 'talk' : 'idle'} />
+      {/* drones */}
+      <Drone side="left" mode={ended ? 'cheer' : running ? 'talk' : 'idle'} />
+      <Drone side="right" mode={ended ? 'cheer' : running ? 'talk' : 'idle'} />
 
       <footer className="mx-auto max-w-7xl px-4 md:px-8 py-8 text-center text-xs text-slate-500">
         © {new Date().getFullYear()} ACM • DDC — Drink, Derive & Code • Sponsored by GRABON
@@ -474,17 +536,16 @@ function App() {
         @keyframes floatX{0%,100%{transform:translateX(-6px)}50%{transform:translateX(6px)}}
         @keyframes gridShift {0%{background-position:0 0,0 0}100%{background-position:0 32px,32px 0}}
         @keyframes scan {0%{transform:translateY(-120%)}100%{transform:translateY(220%)} }
-        @keyframes bob-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-        @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-        @keyframes bob-fast{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+        @keyframes hover-slow{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+        @keyframes hover{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+        @keyframes wobble{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-10px) rotate(-2deg)}75%{transform:translateY(-12px) rotate(2deg)}}
         @keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(0.15)}}
-        .animate-scan{animation:scan 6s linear infinite}
-        .animate-bob-slow{animation:bob-slow 4.5s ease-in-out infinite}
-        .animate-bob{animation:bob 3.5s ease-in-out infinite}
-        .animate-bob-fast{animation:bob-fast 2.6s ease-in-out infinite}
+        .animate-hover-slow{animation:hover-slow 4.5s ease-in-out infinite}
+        .animate-hover{animation:hover 3.2s ease-in-out infinite}
+        .animate-wobble{animation:wobble 2.4s ease-in-out infinite}
         .animate-blink{transform-origin:50% 50%; animation:blink 4.2s linear infinite}
         @keyframes bars{0%{height:4px}50%{height:100%}100%{height:4px}}
-        .animate-bars{animation:bars 1.3s ease-in-out infinite}
+        .animate-bars{animation:bars 1.2s ease-in-out infinite}
         @keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)} }
         .animate-marquee{display:inline-block; min-width:200%; animation:marquee 24s linear infinite}
         @keyframes comet {0%{transform:translateX(0) rotate(-20deg); opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(140vw) rotate(-20deg); opacity:0}}
@@ -495,6 +556,17 @@ function App() {
         .animate-blob{animation:blobMove 18s ease-in-out infinite}
         .animate-blob2{animation:blobMove2 22s ease-in-out infinite}
         .animate-blob3{animation:blobMove3 26s ease-in-out infinite}
+        @keyframes rotate-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        .animate-rotate-slow{animation:rotate-slow 40s linear infinite}
+        @keyframes ring-explode{0%{transform:scale(0.5); opacity:0.9}70%{opacity:0.5}100%{transform:scale(1.4); opacity:0}}
+        .animate-ring-explode{animation:ring-explode 0.9s ease-out forwards}
+        .animate-ring-explode-slower{animation:ring-explode 1.2s ease-out forwards}
+        @keyframes orbit-line{0%{transform:translateY(0) scaleX(1)}50%{transform:translateY(-4px) scaleX(1.1)}100%{transform:translateY(0) scaleX(1)}}
+        .animate-orbit-line{animation:orbit-line 1.4s ease-in-out infinite}
+        @keyframes shake{0%,100%{transform:translate3d(0,0,0)}20%{transform:translate3d(4px,-2px,0)}40%{transform:translate3d(-3px,2px,0)}60%{transform:translate3d(3px,1px,0)}80%{transform:translate3d(-2px,-3px,0)}}
+        .animate-shake{animation:shake 460ms ease-in-out}
+        @keyframes sweep{0%{opacity:0.1; transform:translateY(0) scale(0.9)}50%{opacity:0.3; transform:translateY(6px) scale(1)}100%{opacity:0.1; transform:translateY(0) scale(0.9)}}
+        .animate-sweep{animation:sweep 2.4s ease-in-out infinite}
       `}</style>
     </div>
   )
