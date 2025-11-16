@@ -9,18 +9,23 @@ function formatTime(totalSeconds) {
 
 function useChime(enabled = true) {
   const ctxRef = useRef(null)
+  const getCtx = () => {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    const ctx = ctxRef.current || new Ctx()
+    ctxRef.current = ctx
+    return ctx
+  }
+
   const play = (dur = 500, freq = 880, type = 'sine') => {
     if (!enabled) return
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext
-      const ctx = ctxRef.current || new Ctx()
-      ctxRef.current = ctx
+      const ctx = getCtx()
       const o = ctx.createOscillator()
       const g = ctx.createGain()
       o.type = type
       o.frequency.setValueAtTime(freq, ctx.currentTime)
       g.gain.setValueAtTime(0.0001, ctx.currentTime)
-      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.03)
+      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.03)
       g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur / 1000)
       o.connect(g)
       g.connect(ctx.destination)
@@ -30,6 +35,94 @@ function useChime(enabled = true) {
       // ignore
     }
   }
+
+  // Powerful buzzer: mixed oscillators + noise burst + soft clipping
+  play.buzzer = () => {
+    if (!enabled) return
+    try {
+      const ctx = getCtx()
+      const now = ctx.currentTime
+
+      const master = ctx.createGain()
+      master.gain.setValueAtTime(0.0001, now)
+      master.gain.exponentialRampToValueAtTime(0.7, now + 0.02)
+
+      // Distortion
+      const shaper = ctx.createWaveShaper()
+      const curve = new Float32Array(44100)
+      const amount = 35
+      for (let i = 0; i < curve.length; i++) {
+        const x = (i * 2) / curve.length - 1
+        curve[i] = ((1 + amount) * x) / (1 + amount * Math.abs(x))
+      }
+      shaper.curve = curve
+
+      // Filter to make it punchy
+      const bp = ctx.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.frequency.setValueAtTime(500, now)
+      bp.Q.setValueAtTime(0.6, now)
+
+      // Low square + saw for body
+      const osc1 = ctx.createOscillator()
+      osc1.type = 'square'
+      osc1.frequency.setValueAtTime(140, now)
+      const osc2 = ctx.createOscillator()
+      osc2.type = 'sawtooth'
+      osc2.frequency.setValueAtTime(280, now)
+
+      const gainBody = ctx.createGain()
+      gainBody.gain.setValueAtTime(0.8, now)
+
+      // Noise burst for bite
+      const bufferSize = 2 * ctx.sampleRate
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+      const data = noiseBuffer.getChannelData(0)
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1
+      const noise = ctx.createBufferSource()
+      noise.buffer = noiseBuffer
+      const noiseGain = ctx.createGain()
+      noiseGain.gain.setValueAtTime(0.3, now)
+
+      // Envelope
+      const env = ctx.createGain()
+      env.gain.setValueAtTime(0.0001, now)
+      env.gain.exponentialRampToValueAtTime(1.0, now + 0.015)
+      env.gain.exponentialRampToValueAtTime(0.0001, now + 1.0)
+
+      // LFO tremolo for urgency
+      const lfo = ctx.createOscillator()
+      lfo.type = 'sine'
+      lfo.frequency.setValueAtTime(9, now)
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.setValueAtTime(0.4, now)
+      lfo.connect(lfoGain)
+      lfoGain.connect(env.gain)
+
+      osc1.connect(gainBody)
+      osc2.connect(gainBody)
+      noise.connect(noiseGain)
+
+      gainBody.connect(bp)
+      noiseGain.connect(bp)
+      bp.connect(shaper)
+      shaper.connect(master)
+      master.connect(ctx.destination)
+
+      osc1.start(now)
+      osc2.start(now)
+      noise.start(now)
+      lfo.start(now)
+
+      osc1.stop(now + 1.0)
+      osc2.stop(now + 1.0)
+      noise.stop(now + 0.25)
+      lfo.stop(now + 1.0)
+    } catch (e) {
+      // ignore
+    }
+  }
+
   return play
 }
 
@@ -82,9 +175,22 @@ function App() {
 
   const progress = useMemo(() => Math.max(0, Math.min(1, secondsLeft / DEFAULT_SECONDS)), [secondsLeft])
 
+  // interactive parallax
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = (e.clientX - rect.left) / rect.width // 0..1
+    const py = (e.clientY - rect.top) / rect.height
+    const maxTilt = 6
+    const x = (py - 0.5) * -maxTilt
+    const y = (px - 0.5) * maxTilt
+    setTilt({ x, y })
+  }
+  const onLeave = () => setTilt({ x: 0, y: 0 })
+
   // particles and comets
   const particles = useMemo(() => {
-    return Array.from({ length: 96 }).map((_, i) => {
+    return Array.from({ length: 120 }).map((_, i) => {
       const size = Math.random() * 3 + 1
       const top = Math.random() * 100
       const left = Math.random() * 100
@@ -95,7 +201,7 @@ function App() {
   }, [])
 
   const comets = useMemo(() => {
-    return Array.from({ length: 8 }).map((_, i) => {
+    return Array.from({ length: 10 }).map((_, i) => {
       const top = Math.random() * 100
       const delay = Math.random() * 8
       const dur = 6 + Math.random() * 6
@@ -126,10 +232,9 @@ function App() {
     if (secondsLeft === 0 && !ended) {
       setEnded(true)
       setFlash(true)
-      chime(220, 660, 'triangle')
-      setTimeout(() => chime(220, 880, 'triangle'), 260)
-      setTimeout(() => chime(520, 1046, 'triangle'), 560)
-      setTimeout(() => setFlash(false), 600)
+      // STRONG BUZZER
+      chime.buzzer?.()
+      setTimeout(() => setFlash(false), 800)
     }
     if (secondsLeft > 0 && ended) setEnded(false)
   }, [secondsLeft])
@@ -184,11 +289,14 @@ function App() {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 text-white selection:bg-cyan-400/30">
       {/* Ambient background */}
-      <div className="absolute inset-0 -z-10">
-        {/* gradient blobs with motion */}
-        <div className="absolute -top-24 -left-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-30 bg-cyan-500/30 animate-blob" />
-        <div className="absolute -bottom-32 -right-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-25 bg-fuchsia-500/25 animate-blob2" />
-        <div className="absolute top-1/4 left-1/3 h-[26rem] w-[26rem] rounded-full blur-3xl opacity-10 bg-indigo-500/40 animate-blob3" />
+      <div className="absolute inset-0 -z-10" onMouseMove={onMove} onMouseLeave={onLeave}>
+        {/* gradient blobs with motion and parallax */}
+        <div className="absolute -top-24 -left-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-30 bg-cyan-500/30 animate-blob"
+             style={{ transform: `translate3d(${tilt.y * -4}px, ${tilt.x * -3}px, 0)` }} />
+        <div className="absolute -bottom-32 -right-24 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-25 bg-fuchsia-500/25 animate-blob2"
+             style={{ transform: `translate3d(${tilt.y * 5}px, ${tilt.x * 4}px, 0)` }} />
+        <div className="absolute top-1/4 left-1/3 h-[26rem] w-[26rem] rounded-full blur-3xl opacity-10 bg-indigo-500/40 animate-blob3"
+             style={{ transform: `translate3d(${tilt.y * 2}px, ${tilt.x * 2}px, 0)` }} />
         {/* animated grid */}
         <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{backgroundImage:'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize:'32px 32px', animation:'gridShift 22s linear infinite'}}/>
         {/* particle field */}
@@ -261,9 +369,11 @@ function App() {
         </div>
       </section>
 
-      {/* Main timer panel (full width, Event Control removed) */}
+      {/* Main timer panel (interactive tilt) */}
       <main className="mx-auto max-w-6xl px-4 md:px-8 -mt-10 md:-mt-14 relative z-10">
-        <div className="relative rounded-3xl p-6 md:p-10 bg-gradient-to-br from-slate-900/70 to-slate-900/30 border border-white/10 shadow-[0_10px_60px_rgba(0,0,0,0.5)] overflow-hidden">
+        <div className="relative rounded-3xl p-6 md:p-10 bg-gradient-to-br from-slate-900/70 to-slate-900/30 border border-white/10 shadow-[0_10px_60px_rgba(0,0,0,0.5)] overflow-hidden"
+             style={{ transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`, transition: 'transform 120ms ease-out', willChange: 'transform' }}
+             onMouseMove={onMove} onMouseLeave={onLeave}>
           <div className="pointer-events-none absolute -inset-1 opacity-25 blur-3xl bg-[radial-gradient(circle_at_20%_20%,#38bdf8,transparent_35%),radial-gradient(circle_at_70%_80%,#a78bfa,transparent_30%)]" />
           <div className="pointer-events-none absolute -inset-x-8 -top-24 h-24 bg-gradient-to-b from-transparent via-cyan-300/10 to-transparent animate-scan" />
 
@@ -273,6 +383,9 @@ function App() {
               <div className="absolute inset-0 rounded-full bg-slate-800/60" />
               <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(#22d3ee ${Math.round(progress*360)}deg, #0f172a ${Math.round(progress*360)}deg)`}}/>
               <div className="absolute inset-[14px] rounded-full bg-slate-950/75 backdrop-blur" />
+
+              {/* subtle depth glow */}
+              <div className="absolute inset-[8px] rounded-full" style={{boxShadow:'inset 0 0 40px rgba(34,211,238,0.15), inset 0 0 80px rgba(168,85,247,0.1)'}} />
 
               {/* orbiting badges */}
               <div className="absolute inset-0">
@@ -292,7 +405,7 @@ function App() {
 
               {/* tick marks */}
               <div className="absolute inset-[6px] rounded-full">
-                {ticks.map((_, i) => (
+                {Array.from({ length: 60 }).map((_, i) => (
                   <div key={i} className="absolute left-1/2 top-1/2 origin-[0_center]" style={{transform:`rotate(${i*6}deg) translateX(240px)`}}>
                     <div className={`h-[10px] w-[2px] ${i%5===0?'bg-cyan-300/70 h-[14px]':'bg-white/15'}`}/>
                   </div>
